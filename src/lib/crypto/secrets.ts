@@ -6,8 +6,14 @@ const KEY_LENGTH = 32 // 256 bits
 const IV_LENGTH = 12 // 96 bits for GCM
 const TAG_LENGTH = 16 // 128 bits for GCM
 
-// Validate encryption key on module load
-function validateEncryptionKey(): Buffer {
+// Lazy encryption key validation - only validate when actually needed
+let encryptionKey: Buffer | null = null
+
+function getEncryptionKey(): Buffer {
+  if (encryptionKey) {
+    return encryptionKey
+  }
+  
   const keyEnv = process.env.SECRETS_ENC_KEY
   if (!keyEnv) {
     throw new Error('SECRETS_ENC_KEY environment variable is required for secret encryption')
@@ -21,11 +27,9 @@ function validateEncryptionKey(): Buffer {
     throw new Error('SECRETS_ENC_KEY must be a valid hexadecimal string')
   }
   
-  return Buffer.from(keyEnv, 'hex')
+  encryptionKey = Buffer.from(keyEnv, 'hex')
+  return encryptionKey
 }
-
-// Initialize encryption key
-const encryptionKey = validateEncryptionKey()
 
 /**
  * Encrypt a secret string using AES-256-GCM
@@ -38,8 +42,9 @@ export function encryptSecret(plain: string): Buffer {
   }
   
   try {
+    const key = getEncryptionKey()
     const iv = crypto.randomBytes(IV_LENGTH)
-    const cipher = crypto.createCipheriv(ALG, encryptionKey, iv)
+    const cipher = crypto.createCipheriv(ALG, key, iv)
     
     const enc = Buffer.concat([cipher.update(plain, 'utf8'), cipher.final()])
     const tag = cipher.getAuthTag()
@@ -68,11 +73,12 @@ export function decryptSecret(blob: Buffer): string {
   }
   
   try {
+    const key = getEncryptionKey()
     const iv = blob.subarray(0, IV_LENGTH)
     const tag = blob.subarray(IV_LENGTH, IV_LENGTH + TAG_LENGTH)
     const enc = blob.subarray(IV_LENGTH + TAG_LENGTH)
     
-    const decipher = crypto.createDecipheriv(ALG, encryptionKey, iv)
+    const decipher = crypto.createDecipheriv(ALG, key, iv)
     decipher.setAuthTag(tag)
     
     const dec = Buffer.concat([decipher.update(enc), decipher.final()])
@@ -154,16 +160,40 @@ export function generateRandomSecret(length: number): string {
  * @returns Object with encryption system health information
  */
 export function getEncryptionHealth() {
-  const keyValid = isValidEncryptionKey(process.env.SECRETS_ENC_KEY || '')
-  const testPassed = testEncryption()
+  // During build time, return a safe default without trying to validate
+  if (typeof process === 'undefined' || !process.env) {
+    return {
+      keyConfigured: false,
+      keyValid: false,
+      encryptionWorking: false,
+      algorithm: ALG,
+      keyLength: KEY_LENGTH,
+      healthy: false
+    }
+  }
   
-  return {
-    keyConfigured: !!process.env.SECRETS_ENC_KEY,
-    keyValid,
-    encryptionWorking: testPassed,
-    algorithm: ALG,
-    keyLength: KEY_LENGTH,
-    healthy: keyValid && testPassed
+  try {
+    const keyValid = isValidEncryptionKey(process.env.SECRETS_ENC_KEY || '')
+    const testPassed = testEncryption()
+    
+    return {
+      keyConfigured: !!process.env.SECRETS_ENC_KEY,
+      keyValid,
+      encryptionWorking: testPassed,
+      algorithm: ALG,
+      keyLength: KEY_LENGTH,
+      healthy: keyValid && testPassed
+    }
+  } catch (error) {
+    // If encryption key validation fails, return unhealthy status
+    return {
+      keyConfigured: !!process.env.SECRETS_ENC_KEY,
+      keyValid: false,
+      encryptionWorking: false,
+      algorithm: ALG,
+      keyLength: KEY_LENGTH,
+      healthy: false
+    }
   }
 }
 
