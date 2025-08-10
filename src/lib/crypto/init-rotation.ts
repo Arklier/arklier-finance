@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js';
 import { encryptSecret, generateRandomSecret } from './secrets';
 import { secureLogger } from '@/lib/utils/secure-logger';
 
+
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -46,7 +47,7 @@ export interface RotationSchedule {
  */
 export async function initializeSecretRotation(): Promise<void> {
   try {
-    secureLogger.info('Initializing secret rotation system...');
+    console.log('Initializing secret rotation system...');
 
     // 1. Ensure default rotation policies are in place
     await ensureDefaultPolicies();

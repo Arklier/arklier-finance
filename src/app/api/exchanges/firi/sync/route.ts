@@ -69,7 +69,7 @@ export async function POST(req: NextRequest) {
     userId = user.id
 
     // Get connection details
-    const { data: conn, error: connError } = await supabase
+    const { data: conn } = await supabase
       .from('exchange_connections')
       .select('*')
       .eq('id', connId)

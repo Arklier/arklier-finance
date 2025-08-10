@@ -9,7 +9,7 @@
 import { config } from 'dotenv'
 config({ path: '.env.local' })
 
-import { secureLogger } from '../utils/secure-logger'
+
 
 interface CLICommand {
   name: string
@@ -77,7 +77,7 @@ async function loadCryptoModules() {
       getRotationSchedules: () => service.getRotationSchedules(),
       getRotationStats: () => service.getRotationStats(),
       triggerManualRotation: (secretType: string) => service.rotateSecret(secretType, 'new_secret_value', 'manual'),
-      updateRotationPolicy: (secretType: string, maxAgeDays: number, warningDays: number) => 
+      updateRotationPolicy: (secretType: string, maxAgeDays: number) => 
         service.updateRotationPolicy(secretType, { max_age_days: maxAgeDays }),
       getActiveSecret: async (secretType: string) => {
         const secret = await service.getActiveSecret(secretType)
@@ -216,7 +216,7 @@ const commands: CLICommand[] = [
       try {
         const { updateRotationPolicy } = await loadCryptoModules()
         console.log(`⚙️ Updating rotation policy for ${secretType}...`)
-        await updateRotationPolicy(secretType, maxAgeDays, warningDays)
+        await updateRotationPolicy(secretType, maxAgeDays)
         console.log(`✅ Rotation policy updated for ${secretType}`)
       } catch (error) {
         console.error(`❌ Failed to update rotation policy for ${secretType}:`, error)

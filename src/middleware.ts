@@ -1,10 +1,10 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
-import { secureLogger } from '@/lib/utils/secure-logger'
+
 
 export async function middleware(request: NextRequest) {
   const startTime = Date.now()
-  let supabaseResponse = NextResponse.next({
+  const supabaseResponse = NextResponse.next({
     request,
   })
 
@@ -34,7 +34,7 @@ export async function middleware(request: NextRequest) {
     if (!isProtectedRoute) {
       // Not a protected route, allow access
       const duration = Date.now() - startTime
-      secureLogger.info('Middleware: Non-protected route accessed', {
+      console.log('Middleware: Non-protected route accessed', {
         path: request.nextUrl.pathname,
         duration: `${duration}ms`
       })
@@ -50,10 +50,10 @@ export async function middleware(request: NextRequest) {
           get(name: string) {
             return request.cookies.get(name)?.value
           },
-          set(name: string, value: string, options: any) {
+          set(name: string, value: string, options: { path?: string; domain?: string; maxAge?: number; httpOnly?: boolean; secure?: boolean; sameSite?: boolean | 'lax' | 'strict' | 'none' }) {
             supabaseResponse.cookies.set({ name, value, ...options })
           },
-          remove(name: string, options: any) {
+          remove(name: string, options: { path?: string; domain?: string; maxAge?: number; httpOnly?: boolean; secure?: boolean; sameSite?: boolean | 'lax' | 'strict' | 'none' }) {
             supabaseResponse.cookies.set({ name, value: '', ...options })
           },
         },
@@ -64,11 +64,11 @@ export async function middleware(request: NextRequest) {
     const { data: { session }, error } = await supabase.auth.getSession()
 
     if (error) {
-      secureLogger.warn('Middleware auth error:', { error: error.message, path: request.nextUrl.pathname })
+      console.warn('Middleware auth error:', { error: error.message, path: request.nextUrl.pathname })
     }
 
     if (!session) {
-      secureLogger.info('Redirecting unauthenticated user to login', { 
+      console.log('Redirecting unauthenticated user to login', { 
         path: request.nextUrl.pathname
       })
       return NextResponse.redirect(new URL('/auth/login', request.url))
@@ -76,7 +76,7 @@ export async function middleware(request: NextRequest) {
 
     // Log successful middleware execution
     const duration = Date.now() - startTime
-    secureLogger.info('Middleware executed successfully', {
+    console.log('Middleware executed successfully', {
       path: request.nextUrl.pathname,
       user: session.user?.email || 'unknown',
       duration: `${duration}ms`
@@ -85,7 +85,7 @@ export async function middleware(request: NextRequest) {
     return supabaseResponse
 
   } catch (error) {
-    secureLogger.error('Middleware error:', { 
+    console.error('Middleware error:', { 
       error: error instanceof Error ? error.message : 'Unknown error',
       path: request.nextUrl.pathname 
     })

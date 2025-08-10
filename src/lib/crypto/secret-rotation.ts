@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
-import { encryptSecret, decryptSecret, generateNewEncryptionKey } from './secrets'
+import { encryptSecret } from './secrets'
 import { secureLogger } from '@/lib/utils/secure-logger'
 import { getRequiredEnvVar } from '@/lib/utils/env-validator'
 
@@ -103,6 +103,9 @@ export class SecretRotationService {
         }
       }
 
+      // Type assertion for the policy data - using unknown first for safety
+      const typedPolicy = policy as unknown as SecretRotationPolicy
+
       const { data: currentSecret, error: secretError } = await this.supabase
         .from('secret_versions')
         .select('*')
@@ -115,25 +118,28 @@ export class SecretRotationService {
           needs_rotation: true,
           secret_type: secretType,
           current_age_days: 0,
-          max_age_days: policy.max_age_days,
+          max_age_days: typedPolicy.max_age_days,
           next_rotation_date: null,
-          policy
+          policy: typedPolicy
         }
       }
 
+      // Type assertion for the currentSecret data
+      const typedCurrentSecret = currentSecret as unknown as SecretVersion
+
       const currentAge = Math.floor(
-        (Date.now() - new Date(currentSecret.created_at).getTime()) / (1000 * 60 * 60 * 24)
+        (Date.now() - new Date(typedCurrentSecret.created_at).getTime()) / (1000 * 60 * 60 * 24)
       )
 
-      const needsRotation = currentAge >= policy.rotation_interval_days
+      const needsRotation = currentAge >= typedPolicy.rotation_interval_days
 
       return {
         needs_rotation: needsRotation,
         secret_type: secretType,
         current_age_days: currentAge,
-        max_age_days: policy.max_age_days,
-        next_rotation_date: currentSecret.expires_at,
-        policy
+        max_age_days: typedPolicy.max_age_days,
+        next_rotation_date: typedCurrentSecret.expires_at,
+        policy: typedPolicy
       }
     } catch (error) {
       secureLogger.error('Failed to check rotation status', {
@@ -191,7 +197,7 @@ export class SecretRotationService {
         await this.supabase
           .from('secret_rotation_history')
           .update({ rotated_by: userId })
-          .eq('new_version_id', result)
+          .eq('new_version_id', result as string)
       }
 
       // Log the rotation
@@ -205,7 +211,7 @@ export class SecretRotationService {
 
       return {
         success: true,
-        new_version_id: result,
+        new_version_id: result as string,
         metadata: {
           method,
           reason,
@@ -297,7 +303,7 @@ export class SecretRotationService {
         return null
       }
 
-      return Buffer.from(result)
+      return Buffer.from(result as string)
     } catch (error) {
       secureLogger.error('Failed to get active secret', {
         secretType,
@@ -327,7 +333,7 @@ export class SecretRotationService {
         throw new Error(`Failed to get rotation history: ${error.message}`)
       }
 
-      return data || []
+      return (data as unknown as RotationHistory[]) || []
     } catch (error) {
       secureLogger.error('Failed to get rotation history', {
         secretType,
@@ -351,7 +357,7 @@ export class SecretRotationService {
         throw new Error(`Failed to get rotation schedules: ${error.message}`)
       }
 
-      return data || []
+      return (data as unknown as RotationSchedule[]) || []
     } catch (error) {
       secureLogger.error('Failed to get rotation schedules', {
         errorType: error instanceof Error ? error.constructor.name : typeof error
@@ -461,10 +467,10 @@ export class SecretRotationService {
         .from('secret_rotation_history')
         .select('*')
 
-      const stats: Record<string, any> = {}
+      const stats: Record<string, unknown> = {}
 
       for (const policy of policies || []) {
-        const secretType = policy.secret_type
+        const secretType = policy.secret_type as string
         const typeVersions = versions?.filter(v => v.secret_type === secretType) || []
         const typeHistory = history?.filter(h => h.secret_type === secretType) || []
 
@@ -497,11 +503,14 @@ export class SecretRotationService {
         .select('*')
 
       for (const policy of policies || []) {
+        // Type assertion for the policy data
+        const typedPolicy = policy as unknown as SecretRotationPolicy
+        
         // Check if schedule exists
         const { data: existingSchedule } = await this.supabase
           .from('secret_rotation_schedules')
           .select('id')
-          .eq('secret_type', policy.secret_type)
+          .eq('secret_type', typedPolicy.secret_type)
           .single()
 
         if (!existingSchedule) {
@@ -509,8 +518,8 @@ export class SecretRotationService {
           await this.supabase
             .from('secret_rotation_schedules')
             .insert({
-              secret_type: policy.secret_type,
-              next_rotation_date: new Date(Date.now() + policy.rotation_interval_days * 24 * 60 * 60 * 1000).toISOString(),
+              secret_type: typedPolicy.secret_type,
+              next_rotation_date: new Date(Date.now() + typedPolicy.rotation_interval_days * 24 * 60 * 60 * 1000).toISOString(),
               rotation_status: 'pending'
             })
         }

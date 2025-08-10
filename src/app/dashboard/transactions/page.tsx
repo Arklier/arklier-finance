@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase/client'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Separator } from '@/components/ui/separator'
+
 import { TransactionFilters, type TransactionFilters as TransactionFiltersType } from '@/components/blocks/transaction-filters'
 import { RefreshCw, TrendingUp, TrendingDown, ArrowUpRight, ArrowDownLeft, Minus, Plus } from 'lucide-react'
 import type { Database } from '@/types/database.types'
@@ -33,7 +33,7 @@ export default function TransactionsPage() {
 
   useEffect(() => {
     applyFilters()
-  }, [transactions, filters])
+  }, [transactions, filters, applyFilters])
 
   async function loadTransactions() {
     setLoading(true)
@@ -151,10 +151,7 @@ export default function TransactionsPage() {
     }
   }
 
-  function formatAmount(amount: number | null, asset: string | null) {
-    if (amount === null || asset === null) return '-'
-    return `${amount.toFixed(8)} ${asset}`
-  }
+
 
   function formatPrice(price: number | null) {
     if (price === null) return '-'

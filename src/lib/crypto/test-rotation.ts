@@ -62,7 +62,7 @@ async function testBasicCryptoImports() {
     console.log('✅ Secret rotation module imported successfully')
     
     // Test if we can create a basic instance (without full initialization)
-    const system = new SecretRotationService()
+
     console.log('✅ Secret rotation system instance created')
     
     return true
@@ -86,7 +86,7 @@ async function testDatabaseConnection() {
     const testClient = createClient(supabaseUrl, supabaseKey)
     
     // Simple test query
-    const { data, error } = await testClient
+    const { error } = await testClient
       .from('secret_rotation_config')
       .select('count')
       .limit(1)
@@ -116,7 +116,7 @@ async function runAllTests() {
   ]
   
   let passed = 0
-  let total = tests.length
+  const total = tests.length
   
   for (const test of tests) {
     try {

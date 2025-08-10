@@ -1,12 +1,12 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import { Clock, AlertCircle, CheckCircle, RefreshCw, XCircle } from 'lucide-react'
-import { supabase } from '@/lib/supabase/client'
+
 import type { Database } from '@/types/database.types'
 
 type ExchangeConnection = Database['public']['Tables']['exchange_connections']['Row']
@@ -112,7 +112,7 @@ export function ConnectionStatus({ connection, onSync }: ConnectionStatusProps) 
       <CardContent className="space-y-4">
         <div className="flex items-center justify-between">
           <span className="text-sm font-medium">Status:</span>
-          <Badge variant={getStatusVariant(syncStatus) as any}>
+          <Badge variant={getStatusVariant(syncStatus) as "default" | "secondary" | "destructive" | "outline"}>
             {syncStatus || 'idle'}
           </Badge>
         </div>

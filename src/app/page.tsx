@@ -346,7 +346,7 @@ export default function HomePage() {
                       Connect Exchange
                     </Button>
                   </Link>
-                  <p className="text-xs mt-2">You'll need to sign in to connect exchanges</p>
+                  <p className="text-xs mt-2">You&apos;ll need to sign in to connect exchanges</p>
                 </div>
               ) : (
                 <>

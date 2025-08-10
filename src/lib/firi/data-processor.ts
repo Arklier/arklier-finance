@@ -1,5 +1,5 @@
 import { SupabaseClient } from '@supabase/supabase-js'
-import { normalizeFiri, enrichTradeMatches, mergeFees } from '@/lib/firi/normalize'
+import { normalizeFiri } from '@/lib/firi/normalize'
 import type { SyncCursor } from './sync'
 
 // Import MarketInfo type from normalize.ts and extend it for our use case
@@ -82,7 +82,7 @@ export class FiriDataProcessor {
   async processTransactions(
     transactions: FiriTransactionData[],
     cursor: SyncCursor['transactions'],
-    markets: { [marketId: string]: MarketInfo } = {}
+    _markets: { [marketId: string]: MarketInfo } = {}
   ): Promise<ProcessedData> {
     if (!transactions || transactions.length === 0) {
       return { rawCount: 0, normalizedCount: 0, errors: [] }
@@ -119,7 +119,7 @@ export class FiriDataProcessor {
 
       if (!this.options.skipNormalization && inserted && inserted.length > 0) {
         const normalized = inserted
-          .map((r: any) => normalizeFiri(r))
+          .map((r) => normalizeFiri({ ...r, id: Number(r.id) }))
           .filter((n): n is NonNullable<typeof n> => n !== null)
 
         if (normalized.length > 0) {
@@ -157,7 +157,7 @@ export class FiriDataProcessor {
    */
   async processDeposits(
     deposits: FiriDepositData[],
-    cursor: SyncCursor['deposits']
+    _cursor: SyncCursor['deposits']
   ): Promise<ProcessedData> {
     if (!deposits || deposits.length === 0) {
       return { rawCount: 0, normalizedCount: 0, errors: [] }
@@ -194,7 +194,7 @@ export class FiriDataProcessor {
 
       if (!this.options.skipNormalization && inserted && inserted.length > 0) {
         const normalized = inserted
-          .map((r: any) => normalizeFiri(r))
+          .map((r) => normalizeFiri({ ...r, id: Number(r.id) }))
           .filter((n): n is NonNullable<typeof n> => n !== null)
 
         if (normalized.length > 0) {
@@ -272,7 +272,7 @@ export class FiriDataProcessor {
 
       if (!this.options.skipNormalization && inserted && inserted.length > 0) {
         const normalized = inserted
-          .map((r: any) => normalizeFiri(r))
+          .map((r) => normalizeFiri({ ...r, id: Number(r.id) }))
           .filter((n): n is NonNullable<typeof n> => n !== null)
 
         if (normalized.length > 0) {
@@ -335,8 +335,15 @@ export class FiriDataProcessor {
 
       if (ordersErr) throw new Error(`Failed to fetch orders: ${ordersErr.message}`)
 
-      const orders = (orderRows ?? []).map((r: any) => {
-        const o = r.payload || {}
+      const _orders = (orderRows ?? []).map((r: { payload: unknown }) => {
+        const o = (r.payload as { 
+          _marketInfo?: { base: string; quote: string }; 
+          market?: string; 
+          id?: string | number; 
+          side?: string; 
+          price?: string | number; 
+          amount?: string | number; 
+        }) || {}
         const m = o._marketInfo || (o.market ? markets[o.market] : null) || null
         return {
           id: String(o.id ?? ''),
@@ -348,7 +355,16 @@ export class FiriDataProcessor {
         }
       })
 
-      const enriched = tradeMatches as any[]
+      const enriched = tradeMatches as Array<{
+        source_raw_id: string;
+        base_asset?: string | null;
+        base_amount?: number | null;
+        quote_asset?: string | null;
+        quote_amount?: number | null;
+        fee_asset?: string | null;
+        fee_amount?: number | null;
+        price?: number | null;
+      }>
 
       const finalRows = enriched.map(tx => ({
         ...tx,
@@ -361,7 +377,7 @@ export class FiriDataProcessor {
         price: tx.price ?? null,
       }))
 
-      for (const tx of finalRows as any[]) {
+      for (const tx of finalRows) {
         const { error: updErr } = await this.supabase
           .from('normalized_transactions')
           .update({

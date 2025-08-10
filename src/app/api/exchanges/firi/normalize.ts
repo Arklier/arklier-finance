@@ -1,4 +1,4 @@
-import type { Database } from '@/types/database.types'
+
 
 // Define proper types for Firi API responses
 export interface FiriTransaction {

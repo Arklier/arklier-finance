@@ -1,4 +1,3 @@
-import { firiFetchJson, firiTime } from './fetch'
 import type { FiriCreds } from './sign'
 import { makeFiriHeaders } from './sign'
 import { secureLogger } from '@/lib/utils/secure-logger'
@@ -28,7 +27,7 @@ let cacheExpiry: number = 0
 const CACHE_TTL = 10 * 60 * 1000 // 10 minutes (increased for stability)
 
 // Cache statistics for monitoring
-let cacheStats = {
+const cacheStats = {
   hits: 0,
   misses: 0,
   lastFetch: null as Date | null,

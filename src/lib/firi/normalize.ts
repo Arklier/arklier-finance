@@ -10,7 +10,20 @@
 export type RawRow = {
   id: number
   kind: 'history.transaction' | 'deposit' | 'order' | string
-  payload: any
+  payload: {
+    currency?: string
+    amount?: string | number
+    transaction_hash?: string
+    details?: {
+      match_id?: string | number
+      withdraw_id?: string | number
+      withdraw_txid?: string
+      deposit_id?: string | number
+      deposit_txid?: string
+    }
+    type?: string
+    [key: string]: unknown
+  }
   occurred_at: string | null
 }
 
@@ -43,12 +56,12 @@ export type NormalizedInsert = {
   txid: string | null
   order_id: string | null
   occurred_at: string
-  metadata: any
+  metadata: unknown
 }
 
 export type RawTransaction = {
   id: number
-  payload: any
+  payload: unknown
   kind: string
   occurred_at: string | null
 }
@@ -78,13 +91,13 @@ function when(ts?: string | null): string {
   return ts ? new Date(ts).toISOString() : new Date().toISOString()
 }
 
-function numOrNull(v: any): number | null {
+function numOrNull(v: unknown): number | null {
   if (v === null || v === undefined || v === '') return null
   const n = Number(v)
   return Number.isFinite(n) ? n : null
 }
 
-function absNum(v: any): number | null {
+function absNum(v: unknown): number | null {
   const n = numOrNull(v)
   return n === null ? null : Math.abs(n)
 }

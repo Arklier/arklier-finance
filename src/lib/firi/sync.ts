@@ -1,7 +1,7 @@
 import { firiFetchJson, firiTime, FiriRateLimiter } from './fetch'
 import { fetchFiriMarkets, type MarketsMap } from './markets'
 import type { FiriCreds } from './sign'
-import { secureLogger } from '@/lib/utils/secure-logger'
+
 
 // Define proper types for Firi data
 export interface FiriTransaction {
@@ -101,7 +101,7 @@ export class FiriSyncManager {
   async initialize(): Promise<void> {
     const serverTime = await firiTime()
     this.markets = await fetchFiriMarkets(this.creds, serverTime)
-    secureLogger.info(`[Sync] Initialized with ${Object.keys(this.markets).length} markets`)
+    console.log(`[Sync] Initialized with ${Object.keys(this.markets).length} markets`)
   }
 
   /**
@@ -147,7 +147,7 @@ export class FiriSyncManager {
         hasMore: hasMoreData
       }
     } catch (error) {
-      secureLogger.error('[Sync] Failed to sync transactions', { error, cursor })
+      console.error('[Sync] Failed to sync transactions', { error, cursor })
       throw error
     }
   }
@@ -195,7 +195,7 @@ export class FiriSyncManager {
         hasMore: hasMoreData
       }
     } catch (error) {
-      secureLogger.error('[Sync] Failed to sync deposits', { error, cursor })
+      console.error('[Sync] Failed to sync deposits', { error, cursor })
       throw error
     }
   }
@@ -243,7 +243,7 @@ export class FiriSyncManager {
         hasMore: hasMoreData
       }
     } catch (error) {
-      secureLogger.error('[Sync] Failed to sync orders', { error, cursor })
+      console.error('[Sync] Failed to sync orders', { error, cursor })
       throw error
     }
   }
@@ -352,11 +352,11 @@ export class FiriSyncManager {
     progress: SyncProgress
     newCursor: SyncCursor
   }> {
-    secureLogger.info('[Sync] Starting full sync...')
+    console.log('[Sync] Starting full sync...')
     
     const result = await this.syncAll(existingCursor)
     
-    secureLogger.info('[Sync] Full sync completed', {
+    console.log('[Sync] Full sync completed', {
       transactions: result.progress.transactions.count,
       deposits: result.progress.deposits.count,
       orders: result.progress.orders.count,

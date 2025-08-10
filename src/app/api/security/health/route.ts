@@ -4,7 +4,7 @@ import { validateEnvironment } from '@/lib/utils/env-validator'
 import { getEncryptionHealth } from '@/lib/crypto/secrets'
 import { secureLogger } from '@/lib/utils/secure-logger'
 
-export async function GET(req: NextRequest) {
+export async function GET(_req: NextRequest) {
   const startTime = Date.now()
   let userId: string | undefined
   
@@ -88,7 +88,7 @@ export async function GET(req: NextRequest) {
           hsts: process.env.NODE_ENV === 'production'
         }
       },
-      recommendations: []
+      recommendations: [] as string[]
     }
 
     // Add recommendations based on health status

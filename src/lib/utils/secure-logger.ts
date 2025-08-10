@@ -143,7 +143,7 @@ class SecureLogger {
    * @param data - Optional data (will be sanitized)
    * @param options - Logging options
    */
-  info(message: string, data?: unknown, options: SecureLogOptions = {}): void {
+  info(message: string, data?: unknown, _options: SecureLogOptions = {}): void {
     const sanitizedData = data ? this.deepSanitize(data) : undefined
     console.log(`[INFO] ${message}`, sanitizedData || '')
   }
@@ -154,7 +154,7 @@ class SecureLogger {
    * @param data - Optional data (will be sanitized)
    * @param options - Logging options
    */
-  warn(message: string, data?: unknown, options: SecureLogOptions = {}): void {
+  warn(message: string, data?: unknown, _options: SecureLogOptions = {}): void {
     const sanitizedData = data ? this.deepSanitize(data) : undefined
     console.warn(`[WARN] ${message}`, sanitizedData || '')
   }
@@ -165,7 +165,7 @@ class SecureLogger {
    * @param error - Error object (will be sanitized)
    * @param options - Logging options
    */
-  error(message: string, error?: unknown, options: SecureLogOptions = {}): void {
+  error(message: string, error?: unknown, _options: SecureLogOptions = {}): void {
     let sanitizedError = 'Unknown error'
     
     if (error) {
@@ -174,7 +174,7 @@ class SecureLogger {
       } else if (typeof error === 'string') {
         sanitizedError = this.sanitizeInput(error)
       } else {
-        sanitizedError = this.deepSanitize(error)
+        sanitizedError = JSON.stringify(this.deepSanitize(error))
       }
     }
     
@@ -285,7 +285,7 @@ class SecureLogger {
       action: `SECURITY_${event}`,
       userId,
       success: true,
-      metadata: this.deepSanitize(details)
+      metadata: this.deepSanitize(details) as Record<string, unknown> | undefined
     })
   }
 
@@ -306,7 +306,7 @@ class SecureLogger {
       action: `AUTH_${event}`,
       userId,
       success,
-      metadata: this.deepSanitize(metadata)
+      metadata: this.deepSanitize(metadata) as Record<string, unknown> | undefined
     })
   }
 }
@@ -314,5 +314,4 @@ class SecureLogger {
 // Export singleton instance
 export const secureLogger = SecureLogger.getInstance()
 
-// Export types for external use
-export type { AuditLogEntry, SecureLogOptions }
+

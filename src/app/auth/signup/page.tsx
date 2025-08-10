@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+
 import { useAuth } from '@/components/providers/auth-provider'
 import { AuthGuard } from '@/components/layout/auth-guard'
 import { Button } from '@/components/ui/button'
@@ -20,7 +20,7 @@ export default function SignupPage() {
   const [success, setSuccess] = useState(false)
   
   const { signUp } = useAuth()
-  const router = useRouter()
+
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -49,7 +49,7 @@ export default function SignupPage() {
         // Note: Supabase requires email confirmation by default
         // You might want to redirect to a confirmation page
       }
-    } catch (err) {
+    } catch {
       setError('An unexpected error occurred')
     } finally {
       setLoading(false)
@@ -67,7 +67,7 @@ export default function SignupPage() {
               </div>
               <CardTitle className="text-2xl">Check your email</CardTitle>
               <CardDescription>
-                We've sent you a confirmation link to verify your account.
+                We&apos;ve sent you a confirmation link to verify your account.
               </CardDescription>
             </CardHeader>
             <CardContent className="text-center">
