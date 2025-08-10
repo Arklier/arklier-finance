@@ -1,12 +1,33 @@
 import { SupabaseClient } from '@supabase/supabase-js'
-import { normalizeFiri } from '@/app/api/exchanges/firi/normalize'
+import { normalizeFiri, enrichTradeMatches, mergeFees } from '@/lib/firi/normalize'
 import type { SyncCursor } from './sync'
 
-// Define MarketInfo type locally since it's not exported from normalize.ts
-export interface MarketInfo {
-  base: string
-  quote: string
+// Import MarketInfo type from normalize.ts and extend it for our use case
+import type { MarketInfo as BaseMarketInfo } from '@/lib/firi/normalize'
+
+// Extended MarketInfo that includes market ID for lookup
+export interface MarketInfo extends BaseMarketInfo {
   market: string
+}
+
+// Define proper types for Firi data
+export interface FiriTransactionData {
+  id: string | number
+  date?: string
+  [key: string]: unknown
+}
+
+export interface FiriDepositData {
+  id: string | number
+  date?: string
+  [key: string]: unknown
+}
+
+export interface FiriOrderData {
+  id: string | number
+  market?: string
+  date?: string
+  [key: string]: unknown
 }
 
 export interface ProcessedData {
@@ -48,10 +69,10 @@ export class FiriDataProcessor {
   /**
    * Enrich orders with market information
    */
-  private enrichOrdersWithMarkets(orders: any[], markets: { [marketId: string]: MarketInfo }): any[] {
+  private enrichOrdersWithMarkets(orders: FiriOrderData[], markets: { [marketId: string]: MarketInfo }): FiriOrderData[] {
     return orders.map(order => ({
       ...order,
-      _marketInfo: markets[order.market] || null
+      _marketInfo: markets[order.market || ''] || null
     }))
   }
 
@@ -59,7 +80,7 @@ export class FiriDataProcessor {
    * Process and store transactions data
    */
   async processTransactions(
-    transactions: any[],
+    transactions: FiriTransactionData[],
     cursor: SyncCursor['transactions'],
     markets: { [marketId: string]: MarketInfo } = {}
   ): Promise<ProcessedData> {
@@ -135,7 +156,7 @@ export class FiriDataProcessor {
    * Process and store deposits data
    */
   async processDeposits(
-    deposits: any[],
+    deposits: FiriDepositData[],
     cursor: SyncCursor['deposits']
   ): Promise<ProcessedData> {
     if (!deposits || deposits.length === 0) {
@@ -153,7 +174,7 @@ export class FiriDataProcessor {
         provider: 'firi',
         provider_tx_id: String(d.id || ''),
         kind: 'deposit',
-        occurred_at: d.deposited_at ? new Date(d.deposited_at).toISOString() : null,
+        occurred_at: d.date ? new Date(d.date).toISOString() : null,
         payload: d
       }))
 
@@ -210,7 +231,7 @@ export class FiriDataProcessor {
    * Process and store orders data
    */
   async processOrders(
-    orders: any[],
+    orders: FiriOrderData[],
     cursor: SyncCursor['orders'],
     markets: { [marketId: string]: MarketInfo } = {}
   ): Promise<ProcessedData> {
@@ -231,7 +252,7 @@ export class FiriDataProcessor {
         provider: 'firi',
         provider_tx_id: String(o.id || ''),
         kind: 'order',
-        occurred_at: o.created_at ? new Date(o.created_at).toISOString() : null,
+        occurred_at: o.date ? new Date(o.date).toISOString() : null,
         payload: o
       }))
 
@@ -375,9 +396,9 @@ export class FiriDataProcessor {
    * Process all synced data in batches
    */
   async processAllData(
-    transactions: any[],
-    deposits: any[],
-    orders: any[],
+    transactions: FiriTransactionData[],
+    deposits: FiriDepositData[],
+    orders: FiriOrderData[],
     cursors: {
       transactions?: SyncCursor['transactions']
       deposits?: SyncCursor['deposits']

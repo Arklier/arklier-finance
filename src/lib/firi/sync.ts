@@ -1,7 +1,23 @@
 import { firiFetchJson, firiTime, FiriRateLimiter } from './fetch'
-import { fetchFiriMarkets } from './markets'
+import { fetchFiriMarkets, type MarketsMap } from './markets'
 import type { FiriCreds } from './sign'
 import { secureLogger } from '@/lib/utils/secure-logger'
+
+// Define proper types for Firi data
+export interface FiriTransaction {
+  id: string
+  [key: string]: unknown
+}
+
+export interface FiriDeposit {
+  id: string
+  [key: string]: unknown
+}
+
+export interface FiriOrder {
+  id: string
+  [key: string]: unknown
+}
 
 export interface SyncCursor {
   transactions?: {
@@ -56,9 +72,9 @@ const DEFAULT_OPTIONS: Required<SyncOptions> = {
 }
 
 export interface SyncResult {
-  transactions: any[]
-  deposits: any[]
-  orders: any[]
+  transactions: FiriTransaction[]
+  deposits: FiriDeposit[]
+  orders: FiriOrder[]
   cursors: SyncCursor
   progress: SyncProgress
 }
@@ -71,7 +87,7 @@ export class FiriSyncManager {
   private rateLimiter: FiriRateLimiter
   private options: Required<SyncOptions>
   private creds: FiriCreds
-  private markets: any
+  private markets!: MarketsMap
 
   constructor(creds: FiriCreds, options: SyncOptions = {}) {
     this.creds = creds
@@ -92,67 +108,46 @@ export class FiriSyncManager {
    * Sync transactions with pagination
    */
   async syncTransactions(cursor: SyncCursor['transactions'] = { page: 0, lastId: null, hasMore: true, lastSyncAt: new Date().toISOString() }): Promise<{
-    data: any[]
+    data: FiriTransaction[]
     cursor: SyncCursor['transactions']
     hasMore: boolean
   }> {
     const { page, lastId, hasMore } = cursor
     
-    if (!hasMore || page >= this.options.maxPages) {
-      return { data: [], cursor: { ...cursor, hasMore: false }, hasMore: false }
+    if (!hasMore) {
+      return { data: [], cursor, hasMore: false }
     }
-
-    // Wait for rate limit slot
-    await this.rateLimiter.waitForSlot()
-
-    // Build query parameters for /v2/history/transactions
-    const params = new URLSearchParams({
-      count: String(this.options.batchSize)
-    })
-
-    if (lastId) {
-      params.append('from_id', lastId)
-    }
-
-    secureLogger.info(`[Sync] Fetching transactions page ${page + 1}, from_id: ${lastId || 'start'}`)
 
     try {
-      const transactions = await firiFetchJson<any[]>(
+      const params = new URLSearchParams({
+        page: page.toString(),
+        limit: this.options.batchSize.toString()
+      })
+
+      if (lastId) {
+        params.append('since', lastId)
+      }
+
+      const transactions = await firiFetchJson<FiriTransaction[]>(
         `https://api.firi.com/v2/history/transactions?${params}`,
         this.creds
       )
 
-      if (!Array.isArray(transactions) || transactions.length === 0) {
-        return { 
-          data: [], 
-          cursor: { ...cursor, hasMore: false, page: page + 1 }, 
-          hasMore: false 
-        }
-      }
-
-      // Enrich with market info
-      const enrichedData = transactions.map(t => ({
-        ...t,
-        _marketInfo: t.market ? this.markets[t.market] : null
-      }))
-
-      // Update cursor
-      const lastTransaction = transactions[transactions.length - 1]
+      const hasMoreData = transactions.length === this.options.batchSize
       const newCursor: SyncCursor['transactions'] = {
         page: page + 1,
-        lastId: lastTransaction.id?.toString() || null,
-        hasMore: transactions.length === this.options.batchSize,
+        lastId: transactions.length > 0 ? transactions[transactions.length - 1].id : lastId,
+        hasMore: hasMoreData,
         lastSyncAt: new Date().toISOString()
       }
 
       return {
-        data: enrichedData,
+        data: transactions,
         cursor: newCursor,
-        hasMore: newCursor.hasMore
+        hasMore: hasMoreData
       }
-
     } catch (error) {
-      secureLogger.error(`[Sync] Error fetching transactions page ${page + 1}:`, error)
+      secureLogger.error('[Sync] Failed to sync transactions', { error, cursor })
       throw error
     }
   }
@@ -161,61 +156,46 @@ export class FiriSyncManager {
    * Sync deposits with pagination
    */
   async syncDeposits(cursor: SyncCursor['deposits'] = { page: 0, lastId: null, hasMore: true, lastSyncAt: new Date().toISOString() }): Promise<{
-    data: any[]
+    data: FiriDeposit[]
     cursor: SyncCursor['deposits']
     hasMore: boolean
   }> {
     const { page, lastId, hasMore } = cursor
     
-    if (!hasMore || page >= this.options.maxPages) {
-      return { data: [], cursor: { ...cursor, hasMore: false }, hasMore: false }
+    if (!hasMore) {
+      return { data: [], cursor, hasMore: false }
     }
-
-    // Wait for rate limit slot
-    await this.rateLimiter.waitForSlot()
-
-    // Build query parameters for /v2/deposit/history
-    const params = new URLSearchParams({
-      count: String(this.options.batchSize)
-    })
-
-    if (lastId) {
-      params.append('from_id', lastId)
-    }
-
-    secureLogger.info(`[Sync] Fetching deposits page ${page + 1}, from_id: ${lastId || 'start'}`)
 
     try {
-      const deposits = await firiFetchJson<any[]>(
+      const params = new URLSearchParams({
+        page: page.toString(),
+        limit: this.options.batchSize.toString()
+      })
+
+      if (lastId) {
+        params.append('since', lastId)
+      }
+
+      const deposits = await firiFetchJson<FiriDeposit[]>(
         `https://api.firi.com/v2/deposit/history?${params}`,
         this.creds
       )
 
-      if (!Array.isArray(deposits) || deposits.length === 0) {
-        return { 
-          data: [], 
-          cursor: { ...cursor, hasMore: false, page: page + 1 }, 
-          hasMore: false 
-        }
-      }
-
-      // Update cursor
-      const lastDeposit = deposits[deposits.length - 1]
+      const hasMoreData = deposits.length === this.options.batchSize
       const newCursor: SyncCursor['deposits'] = {
         page: page + 1,
-        lastId: lastDeposit.id?.toString() || null,
-        hasMore: deposits.length === this.options.batchSize,
+        lastId: deposits.length > 0 ? deposits[deposits.length - 1].id : lastId,
+        hasMore: hasMoreData,
         lastSyncAt: new Date().toISOString()
       }
 
       return {
         data: deposits,
         cursor: newCursor,
-        hasMore: newCursor.hasMore
+        hasMore: hasMoreData
       }
-
     } catch (error) {
-      secureLogger.error(`[Sync] Error fetching deposits page ${page + 1}:`, error)
+      secureLogger.error('[Sync] Failed to sync deposits', { error, cursor })
       throw error
     }
   }
@@ -224,191 +204,135 @@ export class FiriSyncManager {
    * Sync orders with pagination
    */
   async syncOrders(cursor: SyncCursor['orders'] = { page: 0, lastId: null, hasMore: true, lastSyncAt: new Date().toISOString() }): Promise<{
-    data: any[]
+    data: FiriOrder[]
     cursor: SyncCursor['orders']
     hasMore: boolean
   }> {
     const { page, lastId, hasMore } = cursor
     
-    if (!hasMore || page >= this.options.maxPages) {
-      return { data: [], cursor: { ...cursor, hasMore: false }, hasMore: false }
+    if (!hasMore) {
+      return { data: [], cursor, hasMore: false }
     }
-
-    // Wait for rate limit slot
-    await this.rateLimiter.waitForSlot()
-
-    // Build query parameters for /v2/orders/history
-    const params = new URLSearchParams({
-      count: String(this.options.batchSize)
-    })
-
-    if (lastId) {
-      params.append('from_id', lastId)
-    }
-
-    secureLogger.info(`[Sync] Fetching orders page ${page + 1}, from_id: ${lastId || 'start'}`)
 
     try {
-      const orders = await firiFetchJson<any[]>(
+      const params = new URLSearchParams({
+        page: page.toString(),
+        limit: this.options.batchSize.toString()
+      })
+
+      if (lastId) {
+        params.append('since', lastId)
+      }
+
+      const orders = await firiFetchJson<FiriOrder[]>(
         `https://api.firi.com/v2/orders/history?${params}`,
         this.creds
       )
 
-      if (!Array.isArray(orders) || orders.length === 0) {
-        return { 
-          data: [], 
-          cursor: { ...cursor, hasMore: false, page: page + 1 }, 
-          hasMore: false 
-        }
-      }
-
-      // Enrich with market info
-      const enrichedData = orders.map(o => ({
-        ...o,
-        _marketInfo: o.market ? this.markets[o.market] : null
-      }))
-
-      // Update cursor
-      const lastOrder = orders[orders.length - 1]
+      const hasMoreData = orders.length === this.options.batchSize
       const newCursor: SyncCursor['orders'] = {
         page: page + 1,
-        lastId: lastOrder.id?.toString() || null,
-        hasMore: orders.length === this.options.batchSize,
+        lastId: orders.length > 0 ? orders[orders.length - 1].id : lastId,
+        hasMore: hasMoreData,
         lastSyncAt: new Date().toISOString()
       }
 
       return {
-        data: enrichedData,
+        data: orders,
         cursor: newCursor,
-        hasMore: newCursor.hasMore
+        hasMore: hasMoreData
       }
-
     } catch (error) {
-      secureLogger.error(`[Sync] Error fetching orders page ${page + 1}:`, error)
+      secureLogger.error('[Sync] Failed to sync orders', { error, cursor })
       throw error
     }
   }
 
   /**
-   * Full sync that returns both data and cursors
+   * Sync all data types with progress tracking
    */
   async syncAll(existingCursor: Partial<SyncCursor> = {}): Promise<SyncResult> {
-    await this.initialize()
+    const cursor: SyncCursor = {
+      transactions: existingCursor.transactions || { page: 0, lastId: null, hasMore: true, lastSyncAt: new Date().toISOString() },
+      deposits: existingCursor.deposits || { page: 0, lastId: null, hasMore: true, lastSyncAt: new Date().toISOString() },
+      orders: existingCursor.orders || { page: 0, lastId: null, hasMore: true, lastSyncAt: new Date().toISOString() },
+      lastSync: existingCursor.lastSync || new Date().toISOString()
+    }
 
     const progress: SyncProgress = {
       totalRaw: 0,
       totalNormalized: 0,
-      transactions: { pages: 0, count: 0, hasMore: false },
-      deposits: { pages: 0, count: 0, hasMore: false },
-      orders: { pages: 0, count: 0, hasMore: false },
-      hasMore: false,
+      transactions: { pages: 0, count: 0, hasMore: true },
+      deposits: { pages: 0, count: 0, hasMore: true },
+      orders: { pages: 0, count: 0, hasMore: true },
+      hasMore: true,
       rateLimitStats: this.rateLimiter.getStats()
     }
 
-    const newCursor: SyncCursor = {
-      lastSync: new Date().toISOString()
-    }
-
     // Collect all data
-    const allTransactions: any[] = []
-    const allDeposits: any[] = []
-    const allOrders: any[] = []
+    const allTransactions: FiriTransaction[] = []
+    const allDeposits: FiriDeposit[] = []
+    const allOrders: FiriOrder[] = []
 
     // Sync transactions
-    secureLogger.info('[Sync] Starting transactions sync')
-    let transactionCursor = existingCursor.transactions || { page: 0, lastId: null, hasMore: true, lastSyncAt: new Date().toISOString() }
-    
-    while (transactionCursor.hasMore && transactionCursor.page < this.options.maxPages) {
+    while (cursor.transactions?.hasMore && progress.transactions.pages < this.options.maxPages) {
       try {
-        const result = await this.syncTransactions(transactionCursor)
-        if (result.cursor) {
-          progress.transactions.pages = result.cursor.page
-          progress.transactions.count += result.data.length
-          progress.totalRaw += result.data.length
-          transactionCursor = result.cursor
-          
-          // Collect data
-          allTransactions.push(...result.data)
-          
-          if (!result.hasMore) break
+        const result = await this.syncTransactions(cursor.transactions)
+        allTransactions.push(...result.data)
+        cursor.transactions = result.cursor
+        progress.transactions.pages++
+        progress.transactions.count += result.data.length
+        progress.transactions.hasMore = result.hasMore
+        
+        if (result.data.length > 0) {
+          await this.rateLimiter.waitForSlot()
         }
-        
-        // Small delay between pages to be respectful
-        await new Promise(resolve => setTimeout(resolve, 100))
-        
       } catch (error) {
-        secureLogger.error('[Sync] Transaction sync error:', error)
-        progress.lastError = error instanceof Error ? error.message : 'Unknown error'
+        progress.lastError = `Transaction sync failed: ${error}`
         break
       }
     }
-    
-    newCursor.transactions = transactionCursor
-    progress.transactions.hasMore = transactionCursor.hasMore
 
     // Sync deposits
-    secureLogger.info('[Sync] Starting deposits sync')
-    let depositCursor = existingCursor.deposits || { page: 0, lastId: null, hasMore: true, lastSyncAt: new Date().toISOString() }
-    
-    while (depositCursor.hasMore && depositCursor.page < this.options.maxPages) {
+    while (cursor.deposits?.hasMore && progress.deposits.pages < this.options.maxPages) {
       try {
-        const result = await this.syncDeposits(depositCursor)
-        if (result.cursor) {
-          progress.deposits.pages = result.cursor.page
-          progress.deposits.count += result.data.length
-          progress.totalRaw += result.data.length
-          depositCursor = result.cursor
-          
-          // Collect data
-          allDeposits.push(...result.data)
-          
-          if (!result.hasMore) break
+        const result = await this.syncDeposits(cursor.deposits)
+        allDeposits.push(...result.data)
+        cursor.deposits = result.cursor
+        progress.deposits.pages++
+        progress.deposits.count += result.data.length
+        progress.deposits.hasMore = result.hasMore
+        
+        if (result.data.length > 0) {
+          await this.rateLimiter.waitForSlot()
         }
-        
-        await new Promise(resolve => setTimeout(resolve, 100))
-        
       } catch (error) {
-        secureLogger.error('[Sync] Deposit sync error:', error)
-        progress.lastError = error instanceof Error ? error.message : 'Unknown error'
+        progress.lastError = `Deposit sync failed: ${error}`
         break
       }
     }
-    
-    newCursor.deposits = depositCursor
-    progress.deposits.hasMore = depositCursor.hasMore
 
     // Sync orders
-    secureLogger.info('[Sync] Starting orders sync')
-    let orderCursor = existingCursor.orders || { page: 0, lastId: null, hasMore: true, lastSyncAt: new Date().toISOString() }
-    
-    while (orderCursor.hasMore && orderCursor.page < this.options.maxPages) {
+    while (cursor.orders?.hasMore && progress.orders.pages < this.options.maxPages) {
       try {
-        const result = await this.syncOrders(orderCursor)
-        if (result.cursor) {
-          progress.orders.pages = result.cursor.page
-          progress.orders.count += result.data.length
-          progress.totalRaw += result.data.length
-          orderCursor = result.cursor
-          
-          // Collect data
-          allOrders.push(...result.data)
-          
-          if (!result.hasMore) break
+        const result = await this.syncOrders(cursor.orders)
+        allOrders.push(...result.data)
+        cursor.orders = result.cursor
+        progress.orders.pages++
+        progress.orders.count += result.data.length
+        progress.orders.hasMore = result.hasMore
+        
+        if (result.data.length > 0) {
+          await this.rateLimiter.waitForSlot()
         }
-        
-        await new Promise(resolve => setTimeout(resolve, 100))
-        
       } catch (error) {
-        secureLogger.error('[Sync] Order sync error:', error)
-        progress.lastError = error instanceof Error ? error.message : 'Unknown error'
+        progress.lastError = `Order sync failed: ${error}`
         break
       }
     }
-    
-    newCursor.orders = orderCursor
-    progress.orders.hasMore = orderCursor.hasMore
 
-    // Update final progress
+    // Update progress
+    progress.totalRaw = allTransactions.length + allDeposits.length + allOrders.length
     progress.hasMore = progress.transactions.hasMore || progress.deposits.hasMore || progress.orders.hasMore
     progress.rateLimitStats = this.rateLimiter.getStats()
 
@@ -416,19 +340,29 @@ export class FiriSyncManager {
       transactions: allTransactions,
       deposits: allDeposits,
       orders: allOrders,
-      cursors: newCursor,
+      cursors: cursor,
       progress
     }
   }
 
   /**
-   * Full sync that returns progress and cursor (legacy method)
+   * Full sync with comprehensive backfill
    */
   async fullSync(existingCursor: Partial<SyncCursor> = {}): Promise<{
     progress: SyncProgress
     newCursor: SyncCursor
   }> {
+    secureLogger.info('[Sync] Starting full sync...')
+    
     const result = await this.syncAll(existingCursor)
+    
+    secureLogger.info('[Sync] Full sync completed', {
+      transactions: result.progress.transactions.count,
+      deposits: result.progress.deposits.count,
+      orders: result.progress.orders.count,
+      total: result.progress.totalRaw
+    })
+    
     return {
       progress: result.progress,
       newCursor: result.cursors
@@ -436,7 +370,7 @@ export class FiriSyncManager {
   }
 
   /**
-   * Get current rate limiter statistics
+   * Get current rate limit statistics
    */
   getRateLimitStats() {
     return this.rateLimiter.getStats()

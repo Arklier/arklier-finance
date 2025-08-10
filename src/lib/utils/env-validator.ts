@@ -13,7 +13,13 @@ export interface EnvValidationResult {
   warnings: string[]
   security: {
     encryptionHealthy: boolean
-    encryptionDetails: any
+    encryptionDetails: {
+      algorithm: string
+      keyLength: number
+      keyConfigured: boolean
+      keyValid: boolean
+      encryptionWorking: boolean
+    } | null
     hasSecureHeaders: boolean
     environment: 'development' | 'staging' | 'production'
   }

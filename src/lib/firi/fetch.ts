@@ -14,7 +14,7 @@ export class FiriFetchError extends Error {
     message: string,
     public status: number,
     public statusText: string,
-    public response?: any,
+    public response?: Response,
     public authDetails?: {
       timestamp?: string
       validity?: string
@@ -187,7 +187,7 @@ export async function firiFetch(
         `Request failed: ${errorText}`,
         response.status,
         response.statusText,
-        errorText
+        response
       )
       
     } catch (error) {

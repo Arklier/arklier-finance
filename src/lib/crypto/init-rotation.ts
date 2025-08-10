@@ -26,7 +26,7 @@ export interface SecretVersion {
   expires_at?: string;
   rotated_at?: string;
   rotated_by?: string;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }
 
 export interface RotationSchedule {

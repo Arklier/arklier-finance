@@ -25,7 +25,7 @@ export interface SecretVersion {
   expires_at: string | null
   rotated_at: string | null
   rotated_by: string | null
-  metadata: Record<string, any>
+  metadata: Record<string, unknown>
 }
 
 export interface RotationHistory {
@@ -37,7 +37,7 @@ export interface RotationHistory {
   rotation_reason: string | null
   rotated_by: string | null
   rotated_at: string
-  metadata: Record<string, any>
+  metadata: Record<string, unknown>
 }
 
 export interface RotationSchedule {
@@ -57,7 +57,7 @@ export interface RotationResult {
   new_version_id?: string
   old_version_id?: string
   error?: string
-  metadata?: Record<string, any>
+  metadata?: Record<string, unknown>
 }
 
 export interface RotationCheckResult {
@@ -447,7 +447,7 @@ export class SecretRotationService {
   /**
    * Get rotation statistics
    */
-  async getRotationStats(): Promise<Record<string, any>> {
+  async getRotationStats(): Promise<Record<string, unknown>> {
     try {
       const { data: policies } = await this.supabase
         .from('secret_rotation_policies')

@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import { Clock, AlertCircle, CheckCircle, RefreshCw, XCircle } from 'lucide-react'
-import { createClient } from '@/lib/supabase/client'
+import { supabase } from '@/lib/supabase/client'
 import type { Database } from '@/types/database.types'
 
 type ExchangeConnection = Database['public']['Tables']['exchange_connections']['Row']

@@ -10,7 +10,7 @@ export interface AuditLogEntry {
   resource?: string
   success: boolean
   error?: string
-  metadata?: Record<string, any>
+  metadata?: Record<string, unknown>
 }
 
 export interface SecureLogOptions {
@@ -87,7 +87,7 @@ class SecureLogger {
    * @param obj - Object or array to sanitize
    * @returns Sanitized object/array
    */
-  private deepSanitize(obj: any): any {
+  private deepSanitize(obj: unknown): unknown {
     if (obj === null || obj === undefined) return obj
     
     if (typeof obj === 'string') {
@@ -99,7 +99,7 @@ class SecureLogger {
     }
     
     if (typeof obj === 'object') {
-      const sanitized: any = {}
+      const sanitized: Record<string, unknown> = {}
       for (const [key, value] of Object.entries(obj)) {
         // Skip sensitive keys entirely
         if (this.isSensitiveKey(key)) {
@@ -143,7 +143,7 @@ class SecureLogger {
    * @param data - Optional data (will be sanitized)
    * @param options - Logging options
    */
-  info(message: string, data?: any, options: SecureLogOptions = {}): void {
+  info(message: string, data?: unknown, options: SecureLogOptions = {}): void {
     const sanitizedData = data ? this.deepSanitize(data) : undefined
     console.log(`[INFO] ${message}`, sanitizedData || '')
   }
@@ -154,7 +154,7 @@ class SecureLogger {
    * @param data - Optional data (will be sanitized)
    * @param options - Logging options
    */
-  warn(message: string, data?: any, options: SecureLogOptions = {}): void {
+  warn(message: string, data?: unknown, options: SecureLogOptions = {}): void {
     const sanitizedData = data ? this.deepSanitize(data) : undefined
     console.warn(`[WARN] ${message}`, sanitizedData || '')
   }
@@ -165,7 +165,7 @@ class SecureLogger {
    * @param error - Error object (will be sanitized)
    * @param options - Logging options
    */
-  error(message: string, error?: any, options: SecureLogOptions = {}): void {
+  error(message: string, error?: unknown, options: SecureLogOptions = {}): void {
     let sanitizedError = 'Unknown error'
     
     if (error) {
@@ -278,7 +278,7 @@ class SecureLogger {
    */
   logSecurityEvent(
     event: string,
-    details?: any,
+    details?: Record<string, unknown>,
     userId?: string
   ): void {
     this.audit({
@@ -300,7 +300,7 @@ class SecureLogger {
     event: 'LOGIN' | 'LOGOUT' | 'LOGIN_FAILED' | 'PASSWORD_CHANGE' | 'MFA_ENABLED' | 'MFA_DISABLED',
     userId?: string,
     success: boolean = true,
-    metadata?: Record<string, any>
+    metadata?: Record<string, unknown>
   ): void {
     this.audit({
       action: `AUTH_${event}`,
