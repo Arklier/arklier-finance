@@ -27,7 +27,7 @@ export interface EnvValidationResult {
 
 export interface EnvRule {
   key: string
-  required: boolean
+  required: boolean | (() => boolean)
   validator?: (value: string) => boolean | string
   description?: string
   sensitive?: boolean
@@ -70,7 +70,10 @@ const ENV_RULES: EnvRule[] = [
   },
   {
     key: 'SUPABASE_SERVICE_ROLE_KEY',
-    required: true,
+    required: () => {
+      // Only require during runtime, not during build
+      return typeof window === 'undefined' && process.env.NODE_ENV !== 'test'
+    },
     sensitive: true,
     validator: (value) => {
       if (!value) return 'Value is required'
@@ -119,7 +122,14 @@ export function validateEnvironment(): EnvValidationResult {
     const value = process.env[rule.key]
     
     // Check if required variable is missing
-    if (rule.required && !value) {
+    if (rule.required === true && !value) {
+      result.missing.push(rule.key)
+      result.isValid = false
+      continue
+    }
+
+    // Check if required function is true
+    if (typeof rule.required === 'function' && !rule.required()) {
       result.missing.push(rule.key)
       result.isValid = false
       continue
@@ -229,7 +239,13 @@ export function validateEnvVar(key: string): { isValid: boolean; reason?: string
 
   const value = process.env[key]
   
-  if (rule.required && !value) {
+  // Check if required
+  if (rule.required === true && !value) {
+    return { isValid: false, reason: 'Required environment variable is missing' }
+  }
+
+  // Check if required function is true
+  if (typeof rule.required === 'function' && !rule.required()) {
     return { isValid: false, reason: 'Required environment variable is missing' }
   }
   
@@ -253,6 +269,16 @@ export function validateEnvVar(key: string): { isValid: boolean; reason?: string
  * @returns The environment variable value if valid, throws error if invalid
  */
 export function getRequiredEnvVar(key: string): string {
+  const rule = ENV_RULES.find(r => r.key === key)
+  
+  // Check if this variable is conditionally required
+  if (rule && typeof rule.required === 'function') {
+    if (!rule.required()) {
+      // Variable is not required in current environment, return empty string
+      return ''
+    }
+  }
+  
   const validation = validateEnvVar(key)
   if (!validation.isValid) {
     throw new Error(`Environment variable ${key} is invalid: ${validation.reason}`)

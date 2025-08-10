@@ -11,9 +11,19 @@ function verifyServiceRole(request: NextRequest): boolean {
   }
   
   const token = authHeader.substring(7)
-  const expectedToken = getRequiredEnvVar('SUPABASE_SERVICE_ROLE_KEY')
   
-  return token === expectedToken
+  try {
+    const expectedToken = getRequiredEnvVar('SUPABASE_SERVICE_ROLE_KEY')
+    // If the key is not required in current environment (e.g., during build), 
+    // return false to prevent unauthorized access
+    if (!expectedToken) {
+      return false
+    }
+    return token === expectedToken
+  } catch (error) {
+    // If we can't get the required env var, deny access
+    return false
+  }
 }
 
 export async function GET(request: NextRequest) {
