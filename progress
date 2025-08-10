@@ -1,0 +1,119 @@
+# Arklier Finance - Development Progress
+
+## Completed Features
+
+### Core Infrastructure
+- ✅ Next.js 14 + TypeScript setup
+- ✅ Supabase integration with proper types
+- ✅ Authentication system
+- ✅ Theme system (light/dark mode)
+- ✅ Responsive layout with sidebar
+- ✅ shadcn/ui components integration
+- ✅ TailwindCSS configuration
+- ✅ Framer Motion animations
+
+### Database Schema
+- ✅ Initial schema with users, exchange_connections, raw_transactions, normalized_transactions
+- ✅ Exchange connection management
+- ✅ Raw transaction storage
+- ✅ Normalized transaction structure
+- ✅ Proper indexing and constraints
+
+### Firi Integration
+- ✅ API authentication and signing
+- ✅ Market data fetching and caching
+- ✅ Transaction sync (history.transaction)
+- ✅ Deposit sync
+- ✅ Order sync
+- ✅ **Normalization system with proper trade matching**
+- ✅ **Market-based asset mapping for orders**
+- ✅ **User POV amount signing for deposits/withdrawals**
+- ✅ **Fee merging with trade matches**
+- ✅ **Transaction type correction for fees/bonuses**
+
+### UI Components
+- ✅ Dashboard layout with sidebar
+- ✅ Exchange connection management
+- ✅ **Transaction display with comprehensive filtering**
+- ✅ **Connection status display (last sync, error handling)**
+- ✅ **Enhanced dashboard with exchange overview**
+- ✅ Theme toggle
+- ✅ Responsive design
+
+## In Progress
+
+### Data Processing
+- 🔄 Enhanced error handling for sync failures
+- 🔄 Batch processing optimization
+- 🔄 Real-time sync status updates
+
+### UI Enhancements
+- ✅ **Transaction filtering and search (COMPLETED)**
+- 🔄 Advanced transaction analytics
+- 🔄 Portfolio overview dashboard
+- 🔄 Export functionality
+
+## Planned Features
+
+### Advanced Analytics
+- 📋 Portfolio performance tracking
+- 📋 Asset allocation analysis
+- 📋 Historical transaction analysis
+- 📋 Tax reporting support
+
+### Multi-Exchange Support
+- 📋 Binance integration
+- 📋 Coinbase integration
+- 📋 Kraken integration
+- 📋 Unified portfolio view
+
+### User Experience
+- 📋 Mobile app
+- 📋 Push notifications
+- 📋 Email alerts
+- 📋 Advanced settings
+
+## Technical Debt & Improvements
+
+### Performance
+- 📋 Database query optimization
+- 📋 Caching strategies
+- 📋 Background job processing
+- 📋 Rate limiting for API calls
+
+### Security
+- 📋 Enhanced encryption for sensitive data
+- 📋 API key rotation
+- 📋 Audit logging
+- 📋 Rate limiting
+
+### Testing
+- 📋 Unit tests for core functions
+- 📋 Integration tests for API endpoints
+- 📋 E2E tests for critical user flows
+- 📋 Performance testing
+
+## Recent Updates
+
+### UI Implementation (Latest)
+- ✅ **Connection Status**: Shows last sync time, sync status, and error messages with proper visual indicators
+- ✅ **Transaction Filters**: Comprehensive filtering by type, assets, date range, and search functionality
+- ✅ **Enhanced Transactions Page**: Beautiful table with icons, proper formatting, and summary statistics
+- ✅ **Dashboard Overview**: Real-time exchange connection status and recent transaction display
+- ✅ **Responsive Design**: All components work seamlessly on desktop and mobile devices
+- ✅ **Visual Indicators**: Color-coded transaction types, status badges, and intuitive icons
+
+### Normalization System (Previous)
+- ✅ **Trade matches**: Now properly use orders + markets to set base/quote, signed amounts, fee, price
+- ✅ **Deposits/withdrawals**: Amounts are correctly signed from user POV (positive for inflows, negative for outflows)
+- ✅ **Fees/bonuses**: Transaction types are correctly identified and processed
+- ✅ **Market integration**: Orders are enriched with market information during processing
+- ✅ **Fee merging**: Fees are properly merged with corresponding trade matches
+- ✅ **Enhanced data flow**: Markets are fetched during sync and passed through the entire processing pipeline
+
+### Previous Updates
+- Firi sync system with proper error handling and progress tracking
+- Database schema with proper indexing and constraints
+- Authentication and user management system
+- Theme system with dark/light mode support
+

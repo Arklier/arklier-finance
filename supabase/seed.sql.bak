@@ -1,0 +1,54 @@
+-- Seed file for development
+-- Creates a test user with proper authentication
+
+-- First, let's create a test user using the proper auth system
+-- We'll use the service role to create a user
+DO $$
+DECLARE
+    user_id uuid;
+BEGIN
+    -- Create a test user
+    INSERT INTO auth.users (
+        instance_id,
+        id,
+        aud,
+        role,
+        email,
+        encrypted_password,
+        email_confirmed_at,
+        created_at,
+        updated_at,
+        confirmation_token,
+        email_change,
+        email_change_token_new,
+        recovery_token,
+        raw_app_meta_data,
+        raw_user_meta_data,
+        is_super_admin,
+        encrypted_password_hash
+    ) VALUES (
+        '00000000-0000-0000-0000-000000000000',
+        gen_random_uuid(),
+        'authenticated',
+        'authenticated',
+        'test@example.com',
+        crypt('password123', gen_salt('bf')),
+        now(),
+        now(),
+        now(),
+        '',
+        '',
+        '',
+        '',
+        '{"provider": "email", "providers": ["email"]}',
+        '{"name": "Test User"}',
+        false,
+        crypt('password123', gen_salt('bf'))
+    ) RETURNING id INTO user_id;
+
+    -- Create a profile for the user
+    INSERT INTO public.profiles (id, email, full_name, created_at, updated_at)
+    VALUES (user_id, 'test@example.com', 'Test User', now(), now());
+
+    RAISE NOTICE 'Created test user with ID: %', user_id;
+END $$;
