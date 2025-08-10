@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '@/lib/supabase/client'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -26,6 +26,46 @@ export default function TransactionsPage() {
     dateFrom: '',
     dateTo: ''
   })
+
+  const applyFilters = useCallback(() => {
+    let filtered = [...transactions]
+
+    // Search filter
+    if (filters.search) {
+      const searchLower = filters.search.toLowerCase()
+      filtered = filtered.filter(tx => 
+        tx.base_asset?.toLowerCase().includes(searchLower) ||
+        tx.quote_asset?.toLowerCase().includes(searchLower) ||
+        tx.txn_type.toLowerCase().includes(searchLower) ||
+        tx.order_id?.toLowerCase().includes(searchLower)
+      )
+    }
+
+    // Transaction type filter
+    if (filters.transactionType !== 'all') {
+      filtered = filtered.filter(tx => tx.txn_type === filters.transactionType)
+    }
+
+    // Base asset filter
+    if (filters.baseAsset !== 'all') {
+      filtered = filtered.filter(tx => tx.base_asset === filters.baseAsset)
+    }
+
+    // Quote asset filter
+    if (filters.quoteAsset !== 'all') {
+      filtered = filtered.filter(tx => tx.quote_asset === filters.quoteAsset)
+    }
+
+    // Date range filter
+    if (filters.dateFrom) {
+      filtered = filtered.filter(tx => new Date(tx.occurred_at) >= new Date(filters.dateFrom))
+    }
+    if (filters.dateTo) {
+      filtered = filtered.filter(tx => new Date(tx.occurred_at) <= new Date(filters.dateTo))
+    }
+
+    setFilteredTransactions(filtered)
+  }, [transactions, filters]);
 
   useEffect(() => {
     loadTransactions()
@@ -65,46 +105,6 @@ export default function TransactionsPage() {
     } finally {
       setLoading(false)
     }
-  }
-
-  function applyFilters() {
-    let filtered = [...transactions]
-
-    // Search filter
-    if (filters.search) {
-      const searchLower = filters.search.toLowerCase()
-      filtered = filtered.filter(tx => 
-        tx.base_asset?.toLowerCase().includes(searchLower) ||
-        tx.quote_asset?.toLowerCase().includes(searchLower) ||
-        tx.txn_type.toLowerCase().includes(searchLower) ||
-        tx.order_id?.toLowerCase().includes(searchLower)
-      )
-    }
-
-    // Transaction type filter
-    if (filters.transactionType !== 'all') {
-      filtered = filtered.filter(tx => tx.txn_type === filters.transactionType)
-    }
-
-    // Base asset filter
-    if (filters.baseAsset !== 'all') {
-      filtered = filtered.filter(tx => tx.base_asset === filters.baseAsset)
-    }
-
-    // Quote asset filter
-    if (filters.quoteAsset !== 'all') {
-      filtered = filtered.filter(tx => tx.quote_asset === filters.quoteAsset)
-    }
-
-    // Date range filter
-    if (filters.dateFrom) {
-      filtered = filtered.filter(tx => new Date(tx.occurred_at) >= new Date(filters.dateFrom))
-    }
-    if (filters.dateTo) {
-      filtered = filtered.filter(tx => new Date(tx.occurred_at) <= new Date(filters.dateTo))
-    }
-
-    setFilteredTransactions(filtered)
   }
 
   function handleFiltersChange(newFilters: TransactionFiltersType) {

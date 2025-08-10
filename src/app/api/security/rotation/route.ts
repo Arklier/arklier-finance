@@ -20,7 +20,7 @@ function verifyServiceRole(request: NextRequest): boolean {
       return false
     }
     return token === expectedToken
-  } catch (error) {
+  } catch {
     // If we can't get the required env var, deny access
     return false
   }
