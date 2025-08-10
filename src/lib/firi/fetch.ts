@@ -1,4 +1,4 @@
-import { makeFiriHeaders, validateFiriHeaders } from './sign'
+import { makeFiriHeaders, validateFiriHeaders, getSignaturePayload } from './sign'
 import type { FiriCreds } from './sign'
 
 export interface FiriFetchOptions {
@@ -93,28 +93,66 @@ export async function firiFetch(
       
       // Get fresh server time for each request to avoid expired signatures
       const serverTime = await firiTime()
-      const headers = makeFiriHeaders(creds, serverTime, 60)
+      const validitySec = 60
+      
+      // Extract request body for POST requests to include in signature
+      let requestBody: any = undefined
+      if (options.method === 'POST' && options.body) {
+        try {
+          if (typeof options.body === 'string') {
+            requestBody = JSON.parse(options.body)
+          } else if (options.body instanceof FormData) {
+            // Convert FormData to object for signature
+            const formDataObj: any = {}
+            for (const [key, value] of options.body.entries()) {
+              formDataObj[key] = value
+            }
+            requestBody = formDataObj
+          } else {
+            requestBody = options.body
+          }
+        } catch (error) {
+          console.warn('[Firi] Could not parse request body for signature:', error)
+        }
+      }
+      
+      const headers = makeFiriHeaders(creds, serverTime, validitySec, requestBody)
+      
+      // Add required query parameters for Firi API
+      const urlObj = new URL(url)
+      urlObj.searchParams.set('timestamp', String(serverTime))
+      urlObj.searchParams.set('validity', String(validitySec))
       
       // Validate headers before sending
       try {
         validateFiriHeaders(headers)
       } catch (validationError) {
+        console.error('[Firi] Header validation failed:', validationError)
         throw new FiriFetchError(
           `Header validation failed: ${validationError instanceof Error ? validationError.message : 'Unknown error'}`,
           400,
           'Bad Request',
           undefined,
           {
-            timestamp: headers.timestamp,
-            validity: headers.validity,
-            signaturePayload: `${headers.timestamp}${headers.validity}`
+            timestamp: String(serverTime),
+            validity: String(validitySec),
+            signaturePayload: getSignaturePayload(serverTime, validitySec, requestBody)
           }
         )
       }
       
-      console.log(`[Firi] Making request to ${url} with timestamp ${serverTime}, validity 60s`)
+      console.log(`[Firi] Making request to ${urlObj.toString()} with timestamp ${serverTime}, validity ${validitySec}s`)
+      console.log(`[Firi] Headers:`, {
+        'firi-access-key': headers['firi-access-key'].substring(0, 8) + '...',
+        'firi-user-clientid': headers['firi-user-clientid'],
+        'firi-user-signature': headers['firi-user-signature'].substring(0, 8) + '...'
+      })
       
-      const response = await fetch(url, {
+      if (requestBody) {
+        console.log(`[Firi] Request body included in signature:`, requestBody)
+      }
+      
+      const response = await fetch(urlObj.toString(), {
         ...options,
         headers: {
           ...options.headers,
@@ -130,9 +168,9 @@ export async function firiFetch(
       // Handle specific error cases
       if (response.status === 401) {
         const authDetails = {
-          timestamp: headers.timestamp,
-          validity: headers.validity,
-          signaturePayload: `${headers.timestamp}${headers.validity}`
+          timestamp: String(serverTime),
+          validity: String(validitySec),
+          signaturePayload: getSignaturePayload(serverTime, validitySec, requestBody)
         }
         
         // Try to get more details from the response
@@ -145,6 +183,17 @@ export async function firiFetch(
         } catch {
           // Ignore JSON parsing errors
         }
+        
+        console.error('[Firi] Authentication failed (401):', {
+          url: urlObj.toString(),
+          errorDetail,
+          authDetails,
+          headers: {
+            'firi-access-key': headers['firi-access-key'].substring(0, 8) + '...',
+            'firi-user-clientid': headers['firi-user-clientid'],
+            'firi-user-signature': headers['firi-user-signature'].substring(0, 8) + '...'
+          }
+        })
         
         throw new FiriFetchError(
           errorDetail,

@@ -120,19 +120,72 @@ export default function FiriConnect() {
         return
       }
 
+      // Send fresh credentials with the sync request
       const r = await fetch('/api/exchanges/firi/sync', { 
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${session.access_token}`
         },
-        body: JSON.stringify({ connectionId: connection.id })
+        body: JSON.stringify({ 
+          apiKey: apiKey,
+          clientId: clientId,
+          secret: secret,
+          connectionId: connection.id 
+        })
       })
       const j = await r.json()
       
       if (r.ok) {
         setMsg('Sync started successfully!')
         await loadConnection()
+      } else {
+        setMsg(`Error: ${j.error || 'failed'}`)
+      }
+    } catch (error) {
+      setMsg(`Error: ${error instanceof Error ? error.message : 'failed' }`)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function syncWithFreshCredentials() {
+    setLoading(true)
+    setMsg(null)
+    
+    try {
+      // Validate that we have credentials
+      if (!apiKey || !clientId || !secret) {
+        setMsg('Error: Please enter your API credentials first.')
+        return
+      }
+
+      // Get the current session for authentication
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) {
+        setMsg('Error: Not authenticated. Please log in again.')
+        return
+      }
+
+      // Send fresh credentials with the sync request (no connectionId needed)
+      const r = await fetch('/api/exchanges/firi/sync', { 
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({ 
+          apiKey: apiKey,
+          clientId: clientId,
+          secret: secret
+        })
+      })
+      const j = await r.json()
+      
+      if (r.ok) {
+        setMsg('Sync completed successfully!')
+        // Optionally save the connection after successful sync
+        await save()
       } else {
         setMsg(`Error: ${j.error || 'failed'}`)
       }
@@ -201,6 +254,14 @@ export default function FiriConnect() {
                 <div className="flex gap-3">
                   <Button type="submit" disabled={loading} className="flex-1">
                     {isConnected ? 'Update Connection' : 'Connect'}
+                  </Button>
+                  <Button 
+                    type="button"
+                    variant="outline" 
+                    onClick={syncWithFreshCredentials}
+                    disabled={loading || !apiKey || !clientId || !secret}
+                  >
+                    Test Sync
                   </Button>
                   <Button 
                     type="button"
@@ -324,6 +385,20 @@ export default function FiriConnect() {
             <p className="text-xs text-muted-foreground">
               Click the button above to enter your Firi API credentials
             </p>
+            <div className="pt-4 border-t">
+              <p className="text-sm text-muted-foreground mb-3">
+                Or sync once without saving credentials:
+              </p>
+              <Button 
+                onClick={() => setShowConnectionForm(true)} 
+                variant="outline"
+                size="sm"
+                className="w-full"
+                type="button"
+              >
+                Quick Sync
+              </Button>
+            </div>
           </CardContent>
         </Card>
       )}

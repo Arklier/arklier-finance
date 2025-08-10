@@ -17,6 +17,20 @@ const KEY_LENGTH = 32
 const IV_LENGTH = 12
 const TAG_LENGTH = 16
 
+// fromPgBytea function (copied from the actual implementation)
+function fromPgBytea(value) {
+  // Handles: \\xHEX, base64, Uint8Array, number[] (rare)
+  if (value instanceof Uint8Array) return Buffer.from(value)
+  if (Array.isArray(value)) return Buffer.from(value) // edge case
+  if (typeof value === 'string') {
+    const s = value.trim()
+    if (s.startsWith('\\x') || s.startsWith('\\X')) return Buffer.from(s.slice(2), 'hex')
+    // try base64 as fallback
+    try { return Buffer.from(s, 'base64') } catch {}
+  }
+  throw new Error('Unsupported bytea representation from database')
+}
+
 function decryptSecret(blob) {
   const iv = blob.subarray(0, IV_LENGTH)
   const tag = blob.subarray(IV_LENGTH, IV_LENGTH + TAG_LENGTH)
@@ -54,11 +68,11 @@ async function testFiriSyncDecryption() {
   )
   
   try {
-    // Test the stored procedure
-    console.log('\n📊 Testing stored procedure...')
+    // Test direct table access
+    console.log('\n📊 Testing direct table access...')
     const { data: connections, error: connError } = await supabase
       .from('exchange_connections')
-      .select('id, user_id')
+      .select('id, user_id, api_key, client_id, api_secret')
       .eq('exchange', 'firi')
       .limit(1)
     
@@ -74,35 +88,31 @@ async function testFiriSyncDecryption() {
     
     const connection = connections[0]
     console.log(`✅ Found connection: ${connection.id}`)
+    console.log(`   - API Key: ${connection.api_key.substring(0, 8)}...`)
+    console.log(`   - Client ID: ${connection.client_id.substring(0, 8)}...`)
     
-    // Test the stored procedure
-    console.log('\n🔐 Testing stored procedure with bytea data...')
-    const { data: connData, error: procError } = await supabase.rpc('get_connection_with_secret_bypass_rls', {
-      p_conn_id: connection.id,
-      p_user_id: connection.user_id
-    })
-    
-    if (procError) {
-      console.error('❌ Stored procedure failed:', procError.message)
-      return false
+    // Check the api_secret format
+    if (connection.api_secret) {
+      console.log(`   - API Secret type: ${typeof connection.api_secret}`)
+      if (Buffer.isBuffer(connection.api_secret)) {
+        console.log(`   - API Secret: Buffer with ${connection.api_secret.length} bytes`)
+      } else if (connection.api_secret.data) {
+        console.log(`   - API Secret: Object with data property, length: ${connection.api_secret.data.length}`)
+      } else {
+        console.log(`   - API Secret: ${JSON.stringify(connection.api_secret).substring(0, 100)}...`)
+      }
+    } else {
+      console.log('   - API Secret: NULL or undefined')
     }
-    
-    if (!connData || connData.length === 0) {
-      console.error('❌ No data returned from stored procedure')
-      return false
-    }
-    
-    const conn = connData[0]
-    console.log('✅ Stored procedure returned data:')
-    console.log(`   - API Key: ${conn.api_key.substring(0, 8)}...`)
-    console.log(`   - Client ID: ${conn.client_id.substring(0, 8)}...`)
-    console.log(`   - API Secret: ${conn.api_secret ? 'Buffer with ' + conn.api_secret.data.length + ' bytes' : 'NULL'}`)
     
     // Test decryption
-    if (conn.api_secret && conn.api_secret.data) {
+    if (connection.api_secret) {
       console.log('\n🔓 Testing decryption...')
       try {
-        const apiSecretBuffer = Buffer.from(conn.api_secret.data)
+        // Use fromPgBytea to convert the string representation back to Buffer
+        const apiSecretBuffer = fromPgBytea(connection.api_secret)
+        console.log(`✅ Converted to Buffer: ${apiSecretBuffer.length} bytes`)
+        
         const decryptedSecret = decryptSecret(apiSecretBuffer)
         console.log(`✅ Decryption successful! Secret length: ${decryptedSecret.length} characters`)
         console.log(`   - First 8 chars: ${decryptedSecret.substring(0, 8)}...`)

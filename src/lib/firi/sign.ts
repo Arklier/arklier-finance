@@ -7,26 +7,25 @@ export type FiriCreds = {
 }
 
 export type FiriHeaders = {
-  'API-key': string
-  clientID: string
-  timestamp: string
-  validity: string
-  'HMAC_encrypted_secretKey': string
+  'firi-access-key': string
+  'firi-user-clientid': string
+  'firi-user-signature': string
 }
 
 /**
  * Firi API authentication headers
  * Based on Firi API documentation, the HMAC signature is calculated as:
- * HMAC-SHA256(secret, `${timestamp}${validity}`)
+ * HMAC-SHA256(secret, JSON.stringify({timestamp, validity, ...requestBody}))
  * 
  * The server validates the signature and checks for expired signatures.
  * 
  * @param creds - Firi API credentials
  * @param serverTime - Server epoch time in seconds from GET /time
  * @param validitySec - Signature validity period in seconds (default: 30)
+ * @param requestBody - Optional request body for POST requests
  * @returns Properly formatted headers for Firi API authentication
  */
-export function makeFiriHeaders(creds: FiriCreds, serverTime: number, validitySec = 30): FiriHeaders {
+export function makeFiriHeaders(creds: FiriCreds, serverTime: number, validitySec = 30, requestBody?: any): FiriHeaders {
   // Validate inputs
   if (!creds.apiKey || !creds.clientId || !creds.secretPlain) {
     throw new Error('Missing required credentials: apiKey, clientId, and secretPlain are required')
@@ -42,17 +41,39 @@ export function makeFiriHeaders(creds: FiriCreds, serverTime: number, validitySe
 
   const timestamp = String(serverTime) // epoch seconds from GET /time
   const validity = String(validitySec)
-  const payload = `${timestamp}${validity}` // Canonical payload format per Firi docs
   
-  // Generate HMAC-SHA256 signature using the secret key
-  const sig = crypto.createHmac('sha256', creds.secretPlain).update(payload).digest('hex')
-  
-  return {
-    'API-key': creds.apiKey,
-    clientID: creds.clientId,
+  // Create the payload as JSON string per Firi docs
+  // For POST requests, include the request body in the signature
+  const payload = JSON.stringify({
     timestamp,
     validity,
-    'HMAC_encrypted_secretKey': sig,
+    ...(requestBody || {})
+  })
+  
+  // Generate HMAC-SHA256 signature using the secret key
+  let sig: string
+  try {
+    sig = crypto.createHmac('sha256', creds.secretPlain).update(payload).digest('hex')
+    
+    // Debug logging for HMAC generation
+    console.log('[Firi HMAC] Debug info:', {
+      timestamp,
+      validity,
+      payload,
+      secretLength: creds.secretPlain.length,
+      signature: sig.substring(0, 8) + '...',
+      apiKey: creds.apiKey.substring(0, 8) + '...',
+      clientId: creds.clientId
+    })
+  } catch (error) {
+    console.error('[Firi HMAC] Error generating signature:', error)
+    throw new Error(`HMAC signature generation failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
+  }
+  
+  return {
+    'firi-access-key': creds.apiKey,
+    'firi-user-clientid': creds.clientId,
+    'firi-user-signature': sig,
   }
 }
 
@@ -60,8 +81,8 @@ export function makeFiriHeaders(creds: FiriCreds, serverTime: number, validitySe
  * Test helper: Generate deterministic signature for testing
  * This function allows testing with known timestamps for reproducible results
  */
-export function makeFiriHeadersForTest(creds: FiriCreds, timestamp: number, validitySec = 30): FiriHeaders {
-  return makeFiriHeaders(creds, timestamp, validitySec)
+export function makeFiriHeadersForTest(creds: FiriCreds, timestamp: number, validitySec = 30, requestBody?: any): FiriHeaders {
+  return makeFiriHeaders(creds, timestamp, validitySec, requestBody)
 }
 
 /**
@@ -70,20 +91,11 @@ export function makeFiriHeadersForTest(creds: FiriCreds, timestamp: number, vali
  * @returns true if valid, throws error if invalid
  */
 export function validateFiriHeaders(headers: FiriHeaders): boolean {
-  if (!headers['API-key'] || !headers.clientID || !headers.timestamp || 
-      !headers.validity || !headers['HMAC_encrypted_secretKey']) {
+  if (!headers['firi-access-key'] || !headers['firi-user-clientid'] || !headers['firi-user-signature']) {
     throw new Error('Missing required headers')
   }
   
-  if (!/^\d+$/.test(headers.timestamp)) {
-    throw new Error('Invalid timestamp format: must be numeric epoch seconds')
-  }
-  
-  if (!/^\d+$/.test(headers.validity)) {
-    throw new Error('Invalid validity format: must be numeric seconds')
-  }
-  
-  if (!/^[a-f0-9]{64}$/.test(headers['HMAC_encrypted_secretKey'])) {
+  if (!/^[a-f0-9]{64}$/.test(headers['firi-user-signature'])) {
     throw new Error('Invalid HMAC format: must be 64-character hex string')
   }
   
@@ -94,8 +106,13 @@ export function validateFiriHeaders(headers: FiriHeaders): boolean {
  * Get the current signature payload for debugging
  * @param timestamp - Server epoch time
  * @param validity - Validity period in seconds
+ * @param requestBody - Optional request body
  * @returns The exact string that gets signed
  */
-export function getSignaturePayload(timestamp: number, validity: number): string {
-  return `${timestamp}${validity}`
+export function getSignaturePayload(timestamp: number, validity: number, requestBody?: any): string {
+  return JSON.stringify({
+    timestamp: String(timestamp),
+    validity: String(validity),
+    ...(requestBody || {})
+  })
 }

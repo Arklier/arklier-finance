@@ -3,13 +3,20 @@ export const runtime = 'nodejs'
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createServiceClient } from '@/lib/supabase/server'
-import { decryptSecret } from '@/lib/crypto/secrets'
-import { fromPgBytea } from '@/lib/crypto/pg-bytea'
 import { FiriSyncManager } from '@/lib/firi/sync'
 import { FiriDataProcessor } from '@/lib/firi/data-processor'
 import { fetchFiriMarkets } from '@/lib/firi/markets'
 import { firiTime } from '@/lib/firi/fetch'
+import { z } from 'zod'
 import type { MarketsMap } from '@/lib/firi/markets'
+
+// Schema for sync request with fresh credentials
+const SyncRequestSchema = z.object({
+  apiKey: z.string().min(10),
+  clientId: z.string().min(3),
+  secret: z.string().min(10),
+  connectionId: z.string().optional(), // Optional for existing connections
+})
 
 export async function POST(req: NextRequest) {
   try {
@@ -20,52 +27,32 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
     }
 
-    // Get user's Firi connection
-    const { data: conn, error: connErr } = await supabase
-      .from('exchange_connections')
-      .select('*')
-      .eq('user_id', user.id)
-      .eq('exchange', 'firi')
-      .single()
-
-    if (connErr || !conn) {
-      return NextResponse.json({ error: 'no-connection' }, { status: 400 })
-    }
-
-    // Decrypt the API secret
-    let secretPlain: string
-    try {
-      const blob = fromPgBytea(conn.api_secret)
-      secretPlain = decryptSecret(blob)
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e)
-      return NextResponse.json({ error: 'decrypt-failed', detail: msg }, { status: 500 })
+    // Parse request body with fresh credentials
+    const body = SyncRequestSchema.parse(await req.json())
+    
+    // Use fresh credentials directly instead of decrypting stored ones
+    const freshCreds = {
+      apiKey: body.apiKey,
+      clientId: body.clientId,
+      secretPlain: body.secret
     }
 
     // Create service client for database operations
     const serviceClient = createServiceClient()
 
-    // Initialize sync manager
-    const syncManager = new FiriSyncManager({
-      apiKey: conn.api_key,
-      clientId: conn.client_id,
-      secretPlain
-    })
+    // Initialize sync manager with fresh credentials
+    const syncManager = new FiriSyncManager(freshCreds)
 
     // Initialize data processor
     const dataProcessor = new FiriDataProcessor(
       serviceClient,
       user.id,
-      conn.id
+      body.connectionId || 'temp' // Use connection ID if provided, otherwise temp
     )
 
-    // Get server time and markets
+    // Get server time and markets with fresh credentials
     const serverTime = await firiTime()
-    const markets = await fetchFiriMarkets({
-      apiKey: conn.api_key,
-      clientId: conn.client_id,
-      secretPlain
-    }, serverTime)
+    const markets = await fetchFiriMarkets(freshCreds, serverTime)
 
     // Initialize sync manager
     await syncManager.initialize()
@@ -95,14 +82,16 @@ export async function POST(req: NextRequest) {
       )
     )
 
-    // Update connection with last sync info
-    await serviceClient
-      .from('exchange_connections')
-      .update({ 
-        updated_at: new Date().toISOString(),
-        // You could add a last_sync_at field here if you want to track sync timing
-      })
-      .eq('id', conn.id)
+    // Update connection with last sync info if connectionId is provided
+    if (body.connectionId) {
+      await serviceClient
+        .from('exchange_connections')
+        .update({ 
+          updated_at: new Date().toISOString(),
+          // You could add a last_sync_at field here if you want to track sync timing
+        })
+        .eq('id', body.connectionId)
+    }
 
     return NextResponse.json({
       success: true,

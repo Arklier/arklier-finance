@@ -6,7 +6,7 @@ This document describes the implementation of Firi's HMAC authentication system 
 
 Firi's API uses HMAC-SHA256 authentication with the following components:
 - **API Key**: Your Firi API key
-- **Client ID**: Your Firi client identifier
+- **Client ID**: Your Firi client identifier  
 - **Secret Key**: Your Firi secret key (used for HMAC signing)
 - **Timestamp**: Server epoch time from `/time` endpoint
 - **Validity**: Signature validity period in seconds
@@ -14,51 +14,62 @@ Firi's API uses HMAC-SHA256 authentication with the following components:
 ## Authentication Flow
 
 1. **Get Server Time**: Call `GET /time` to get the current server epoch time
-2. **Generate Payload**: Create signature payload as `${timestamp}${validity}`
+2. **Generate Payload**: Create signature payload as JSON string containing `timestamp`, `validity`, and optionally the request body
 3. **Calculate HMAC**: Generate HMAC-SHA256 signature using your secret key
 4. **Set Headers**: Include all required headers in the request
+5. **Add Query Params**: Include `timestamp` and `validity` as query parameters
 
 ## Implementation Details
 
 ### Core Functions
 
-#### `makeFiriHeaders(creds, serverTime, validitySec)`
+#### `makeFiriHeaders(creds, serverTime, validitySec, requestBody?)`
 Generates complete authentication headers for Firi API requests.
 
 **Parameters:**
 - `creds`: Object containing `apiKey`, `clientId`, and `secretPlain`
 - `serverTime`: Server epoch time in seconds (from `/time` endpoint)
 - `validitySec`: Signature validity period in seconds (default: 30, max: 3600)
+- `requestBody`: Optional request body for POST requests (included in signature)
 
 **Returns:**
 ```typescript
 {
-  'API-key': string,
-  clientID: string,
-  timestamp: string,
-  validity: string,
-  'HMAC_encrypted_secretKey': string
+  'firi-access-key': string,
+  'firi-user-clientid': string,
+  'firi-user-signature': string
 }
 ```
 
 #### `validateFiriHeaders(headers)`
 Validates that headers are properly formatted before sending requests.
 
-#### `getSignaturePayload(timestamp, validity)`
+#### `getSignaturePayload(timestamp, validity, requestBody?)`
 Returns the exact string that gets signed for debugging purposes.
 
 ### Signature Calculation
 
 The HMAC signature is calculated as:
 ```javascript
-const payload = `${timestamp}${validity}`
+const payload = JSON.stringify({
+  timestamp: String(timestamp),
+  validity: String(validity),
+  ...requestBody
+})
 const signature = crypto.createHmac('sha256', secretKey).update(payload).digest('hex')
 ```
 
-**Example:**
+**Example for GET request:**
 - Timestamp: `1640995200`
 - Validity: `30`
-- Payload: `"164099520030"`
+- Payload: `{"timestamp":"1640995200","validity":"30"}`
+- Result: 64-character hex string
+
+**Example for POST request (order creation):**
+- Timestamp: `1640995200`
+- Validity: `2000`
+- Request Body: `{"market":"BTCNOK","price":"1000","amount":"1","type":"ask"}`
+- Payload: `{"timestamp":"1640995200","validity":"2000","market":"BTCNOK","price":"1000","amount":"1","type":"ask"}`
 - Result: 64-character hex string
 
 ### Header Format
@@ -66,16 +77,22 @@ const signature = crypto.createHmac('sha256', secretKey).update(payload).digest(
 All requests to Firi's API must include these headers:
 
 ```
-API-key: your-api-key
-clientID: your-client-id
-timestamp: 1640995200
-validity: 30
-HMAC_encrypted_secretKey: 5e055f335bd759d71c53d261fdfa6ac20668714847648b957c3d903bd03d1da8
+firi-access-key: your-api-key
+firi-user-clientid: your-client-id
+firi-user-signature: 5e055f335bd759d71c53d261fdfa6ac20668714847648b957c3d903bd03d1da8
+```
+
+### Query Parameters
+
+All requests must include these query parameters:
+
+```
+?timestamp=1640995200&validity=30
 ```
 
 ## Usage Examples
 
-### Basic Request
+### Basic GET Request
 ```typescript
 import { makeFiriHeaders } from '@/lib/firi/sign'
 import { firiTime } from '@/lib/firi/fetch'
@@ -89,22 +106,54 @@ const creds = {
 // Get fresh server time
 const serverTime = await firiTime()
 
-// Generate headers
+// Generate headers (no request body for GET)
 const headers = makeFiriHeaders(creds, serverTime, 60)
 
-// Make request
-const response = await fetch('https://api.firi.com/v2/history/transactions', {
-  headers
-})
+// Make request with query parameters
+const url = `https://api.firi.com/v2/history/transactions?timestamp=${serverTime}&validity=60`
+const response = await fetch(url, { headers })
+```
+
+### POST Request with Body
+```typescript
+// For POST requests, include the request body in the signature
+const orderData = {
+  market: 'BTCNOK',
+  price: '1000',
+  amount: '1',
+  type: 'ask'
+}
+
+const headers = makeFiriHeaders(creds, serverTime, 60, orderData)
+
+const response = await fetch(
+  `https://api.firi.com/v2/orders?timestamp=${serverTime}&validity=60`,
+  {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(orderData)
+  }
+)
 ```
 
 ### Using the Fetch Utility
 ```typescript
 import { firiFetchJson } from '@/lib/firi/fetch'
 
+// GET request
 const transactions = await firiFetchJson(
   'https://api.firi.com/v2/history/transactions',
   creds
+)
+
+// POST request
+const orderResult = await firiFetchJson(
+  'https://api.firi.com/v2/orders',
+  creds,
+  {
+    method: 'POST',
+    body: JSON.stringify(orderData)
+  }
 )
 ```
 
@@ -130,6 +179,7 @@ The implementation includes comprehensive error handling:
 2. **Time Synchronization**: Always use server time from `/time` endpoint
 3. **Signature Validity**: Keep validity periods short (30-60 seconds recommended)
 4. **Credential Rotation**: Regularly rotate API keys and secrets
+5. **Request Body Signing**: Always include request body in signature for POST requests
 
 ## Testing
 
@@ -139,6 +189,21 @@ The implementation includes comprehensive testing:
 - **Header Validation**: Verifies header format and HMAC structure
 - **Signature Consistency**: Confirms HMAC calculation matches expected results
 - **Error Handling**: Tests various error scenarios and edge cases
+
+### Running Tests
+```bash
+node scripts/test-firi-hmac.js
+```
+
+This test script verifies:
+- Basic signature generation
+- POST request body signing
+- Signature format validation
+- Validity period handling
+- Signature consistency
+- Request body variations
+- Firi docs compliance
+- Error handling
 
 ## Rate Limiting
 
@@ -155,6 +220,7 @@ Firi's API has a rate limit of 10 requests per second. The implementation includ
 3. **Handle errors gracefully**: Implement proper error handling and logging
 4. **Monitor rate limits**: Track API usage to avoid hitting limits
 5. **Validate responses**: Check response status and handle errors appropriately
+6. **Include request body**: Always sign the complete request body for POST requests
 
 ## Troubleshooting
 
@@ -173,6 +239,7 @@ The implementation provides detailed logging for debugging:
 - Generated headers and signatures
 - Server responses and error details
 - Rate limiting and retry information
+- Request body signing details
 
 ## API Endpoints
 
